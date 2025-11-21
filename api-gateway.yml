@@ -4,32 +4,143 @@ server:
 spring:
   application:
     name: api-gateway
+  config:
+    import: optional:configserver:http://config-service:8888
+  data:
+    redis:
+      host: redis
+      port: 6379
+      connect-timeout: 10s
+      timeout: 3s
   cloud:
     gateway:
       discovery:
         locator:
           enabled: true
-          lower-case-service-id: true
+          lower-case-service-id: false
       routes:
-        - id: auth
-          uri: lb://auth-service
+        - id: auth-service
+          uri: lb://AUTH-SERVICE
+          predicates: [ Path=/auth/** ]
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
+        - id: user-service
+          uri: lb://USER-SERVICE
+          predicates: [ Path=/users/** ]
+          filters:
+            - AddUserInfoToHeader
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
+        - id: exam-service
+          uri: lb://EXAM-SERVICE
+          predicates: [ Path=/exams/** ]
+          filters:
+            - AddUserInfoToHeader
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
+        - id: career-service
+          uri: lb://CAREER-SERVICE
+          predicates: [ Path=/career/** ]
+          filters:
+            - AddUserInfoToHeader
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
+        - id: question-service
+          uri: lb://QUESTION-SERVICE
+          predicates: [ Path=/questions/** ]
+          filters:
+            - AddUserInfoToHeader
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
+        - id: news-service
+          uri: lb://NEWS-SERVICE
           predicates:
-            - Path=/auth/**
-        - id: user
-          uri: lb://user-service
+            - Path=/news/**
+          filters:
+            - AddUserInfoToHeader
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
+        - id: recruitments-service
+          uri: lb://NEWS-SERVICE
           predicates:
-            - Path=/users/**
-        - id: exam
-          uri: lb://exam-service
-          predicates:
-            - Path=/exams/**
-      # CORS cho môi trường dev
+            - Path=/recruitments/**
+          filters:
+            - AddUserInfoToHeader
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@remoteAddrKeyResolver}"
+
       globalcors:
-        corsConfigurations:
+        cors-configurations:
           '[/**]':
-            allowedOrigins: "*"
-            allowedMethods: "*"
-            allowedHeaders: "*"
-      # tránh trùng header CORS
+            allowed-origins: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+            allow-credentials: false
       default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - name: DedupeResponseHeader
+          args:
+            name: Access-Control-Allow-Credentials Access-Control-Allow-Origin
+            strategy: RETAIN_UNIQUE
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,prometheus
+  endpoint:
+    gateway:
+      enabled: true
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty: DEBUG
+    com.abc.gateway_service: DEBUG
+
+# CHO DECODER (HS256): cùng secret với auth-service (Base64)
+jwt:
+  secret: "UCIafMmHwgsJKIgg4xVAL/eOvR3ZXD/ZnYE9AfMaMQg="
